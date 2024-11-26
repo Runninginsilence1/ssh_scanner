@@ -1,0 +1,8 @@
+go.sum
+*.zip
+resources/
+log/
+.idea/
+!*.go
+*.exe
+*.ps1
