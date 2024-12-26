@@ -1,4 +1,4 @@
-module ssh_scanner
+module github.com/Runninginsilence1/scanner
 
 go 1.23
 

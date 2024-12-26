@@ -1,4 +1,4 @@
-package core
+package ssh
 
 import (
 	"errors"
@@ -6,11 +6,17 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/duke-git/lancet/v2/fileutil"
+	"github.com/duke-git/lancet/v2/formatter"
+	"github.com/duke-git/lancet/v2/slice"
 	"golang.org/x/crypto/ssh"
+
+	"github.com/Runninginsilence1/scanner/internal/ip_gen"
+	"github.com/Runninginsilence1/scanner/pkg/ip_helper"
 )
 
 var (
@@ -18,21 +24,11 @@ var (
 	AuthError    = errors.New("AuthError")
 )
 
-//type NetworkError struct {
-//	Err error
-//}
-//
-//func (e *NetworkError) Error() string {
-//	return fmt.Sprintf("NetworkError: %v", e.Err)
-//}
-//
-//type AuthError struct {
-//	Err error
-//}
-//
-//func (e *AuthError) Error() string {
-//	return fmt.Sprintf("NetworkError: %v", e.Err)
-//}
+type Result struct {
+	OkList         []string `json:"ok_list"`
+	AuthErrList    []string `json:"auth_err_list"`
+	NetworkErrList []string `json:"network_err_list"`
+}
 
 // TryConnectServer provides ssh client login by password or key auth.
 // Example: TryConnectServer("192.168.6.61:22", "123456", "root")
@@ -59,18 +55,26 @@ func TryConnectServer(ipPort string, password string, user string) (ok bool) {
 	return true
 }
 
-func TryConnectServerV2(ipPort string, password string, user string) (err error) {
+func TryConnectServerV2(ipPort string, password string, user string, enablePubKey bool) (err error) {
+	method := []ssh.AuthMethod{
+		//addIdRsaFileAuth(),
+		ssh.Password(password),
+	}
+
+	if enablePubKey {
+		method = append(method, addIdRsaFileAuth())
+	}
+
 	// 设置客户端请求参数
+
 	config := &ssh.ClientConfig{
 		User: user,
 		// 支持公钥认证和密码验证
-		Auth: []ssh.AuthMethod{
-			//addIdRsaFileAuth(),
-			ssh.Password(password),
-		},
+		Auth: method,
 		// HostKeyCallback: ssh.FixedHostKey(hostKey),
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 忽略主机密钥
-		Timeout:         1000 * time.Millisecond,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 忽略主机密钥不匹配的情况
+
+		Timeout: 500 * time.Millisecond,
 	}
 
 	// 作为客户端连接SSH服务器
@@ -89,23 +93,34 @@ func TryConnectServerV2(ipPort string, password string, user string) (err error)
 	return nil
 }
 
+func MockScanProgress() (err error) {
+	time.Sleep(500 * time.Millisecond)
+	return
+}
+
+var readPubKeyFileOnce sync.Once
+var authMethod ssh.AuthMethod
+
 func addIdRsaFileAuth() ssh.AuthMethod {
 	//C:\Users\H\.ssh\known_hosts
-	knownHostspath := `C:\Users\H\.ssh\id_rsa`
-	reader, _, err := fileutil.ReadFile(knownHostspath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	pubKeyBytes, err := io.ReadAll(reader)
 
-	// 解析id_rsa文件
+	readPubKeyFileOnce.Do(func() {
+		knownHostspath := `C:\Users\H\.ssh\id_rsa`
+		reader, _, err := fileutil.ReadFile(knownHostspath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pubKeyBytes, err := io.ReadAll(reader)
 
-	privateKey, err := ssh.ParsePrivateKey(pubKeyBytes)
-	if err != nil {
-		log.Fatal(err)
-	}
-	// 创建 AuthMethod
-	authMethod := ssh.PublicKeys(privateKey)
+		// 解析id_rsa文件
+
+		privateKey, err := ssh.ParsePrivateKey(pubKeyBytes)
+		if err != nil {
+			log.Fatal(err)
+		}
+		// 创建 AuthMethod
+		authMethod = ssh.PublicKeys(privateKey)
+	})
 
 	return authMethod
 
@@ -136,7 +151,18 @@ func SSHScanner(prefix, start, end int, user, password string) {
 	wg.Wait()
 }
 
-func SSHScannerV2(prefix, start, end int, user, password string) {
+type Option struct {
+	ShowNetwork  bool
+	ShowAuth     bool
+	ShowOk       bool
+	EnablePubKey bool
+}
+
+func ScannerV2(prefix, start, end int, user, password string, opt Option, format string) {
+	calTime := time.Now()
+	defer func() {
+		fmt.Printf("扫描完成, 用时: %v ms\n", time.Now().Sub(calTime).Milliseconds())
+	}()
 	// 构建队列和启动并发
 	// 完成go前需要设置done
 	var wg sync.WaitGroup
@@ -175,8 +201,11 @@ func SSHScannerV2(prefix, start, end int, user, password string) {
 	for i := start; i <= end; i++ {
 		go func(ip int) {
 			defer wg.Done()
-			ipAddr := fmt.Sprintf("192.168.%v.%v:22", prefix, ip)
-			err := TryConnectServerV2(ipAddr, password, user)
+			ipAddr := ip_gen.GetSshAddr(prefix, ip)
+			//now := time.Now()
+			err := TryConnectServerV2(ipAddr, password, user, opt.EnablePubKey)
+			//err := MockScanProgress()
+			//fmt.Printf("%v: %v ms\n", ipAddr, time.Now().Sub(now).Milliseconds())
 			if err == nil {
 				okChan <- ipAddr
 			} else if errors.Is(err, AuthError) {
@@ -189,19 +218,64 @@ func SSHScannerV2(prefix, start, end int, user, password string) {
 	wg.Wait()
 	close(doneChan)
 
-	fmt.Println("认证失败:")
-	for _, ip := range authArr {
-		fmt.Println(ip)
-	}
-	fmt.Println()
+	sortByIpLast(okArr)
+	sortByIpLast(authArr)
+	sortByIpLast(networkArr)
 
-	//fmt.Println("网络错误:")
-	//for _, ip := range networkArr {
-	//	fmt.Println(ip)
-	//}
+	output(okArr, authArr, networkArr, opt, format)
+}
 
-	fmt.Println("成功登录:")
-	for _, ip := range okArr {
-		fmt.Println(ip)
+func sortByIpLast(ips []string) {
+	slice.SortBy(ips, func(a, b string) bool {
+		a = strings.TrimSuffix(a, ":22")
+		b = strings.TrimSuffix(b, ":22")
+
+		i := ip_helper.GetIpLast(a)
+		j := ip_helper.GetIpLast(b)
+
+		return i < j
+	})
+}
+
+func output(okArr, authArr, networkArr []string, opt Option, format string) {
+	if format == "json" {
+		result := Result{
+			OkList:         okArr,
+			AuthErrList:    authArr,
+			NetworkErrList: networkArr,
+		}
+
+		pretty, _ := formatter.Pretty(result)
+		fmt.Println(pretty)
+	} else {
+		if opt.ShowAuth {
+			fmt.Println("认证失败:")
+			for _, ip := range authArr {
+				fmt.Println(ip)
+			}
+			fmt.Println()
+
+		}
+		if opt.ShowNetwork {
+			fmt.Println("网络错误:")
+			for _, ip := range networkArr {
+				fmt.Println(ip)
+			}
+			fmt.Println()
+		}
+
+		//if opt.ShowOk {
+		if true {
+			if len(okArr) > 0 {
+				fmt.Println("成功登录:")
+				for _, ip := range okArr {
+					fmt.Println(ip)
+				}
+			} else {
+				fmt.Println("没有成功登录的主机")
+			}
+		}
+
 	}
+
 }

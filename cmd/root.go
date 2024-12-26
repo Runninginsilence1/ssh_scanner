@@ -4,46 +4,69 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+)
 
-	"ssh_scanner/internal/core"
+// print options
+var (
+	NetworkFailed        bool
+	AuthenticationFailed bool
 )
 
 // args for rootCmd
+var (
+	Prefix       int    // 网段
+	Start        int    // 起始IP
+	End          int    // 结束IP
+	User         string // 用户名
+	Password     string // 密码
+	EnablePubKey bool
+)
 
-var Prefix int      // 网段
-var Start int       // 起始IP
-var End int         // 结束IP
-var User string     // 用户名
-var Password string // 密码
-// prefix, start, end int, user, password string
+// arg for output format
+var (
+	OutputFormat string
+	_            struct{}
+)
 
-// concept of Command
 var rootCmd = &cobra.Command{
-	Use:   "ssh_scanner",
-	Short: "扫描局域网内的SSH服务并尝试密码登录",
-	Long:  `扫描局域网内的SSH服务并尝试密码登录`,
-	Run: func(cmd *cobra.Command, args []string) {
-		Print()
-		//ssh_demo.SSHScanner(Prefix, Start, End, User, Password)
-		core.SSHScannerV2(Prefix, Start, End, User, Password)
+	Use:   "scanner",
+	Short: "扫描局域网内的SSH服务并尝试密码或密钥登录",
+	Long:  `扫描局域网内的SSH服务并尝试密码或密钥登录`,
+	Run: func(cmd *cobra.Command, _ []string) {
+		_ = cmd.Help()
 	},
 }
 
 func init() {
+
+	// PersistentFlags: 全局参数, 所有子命令都可以使用
+	// Flags: 局部参数, 只能在当前命令中使用
 	{
-		rootCmd.Flags().IntVarP(&Prefix, "prefix", "p", 3, "网段, 例如 3")
-		rootCmd.Flags().IntVarP(&Start, "start", "s", 1, "起始IP的最后一位, 例如 1")
-		rootCmd.Flags().IntVarP(&End, "end", "e", 254, "结束IP的最后一位, 例如 254")
-		rootCmd.Flags().StringVarP(&User, "user", "u", "root", "用户名, 例如 root")
-		rootCmd.Flags().StringVarP(&Password, "password", "P", "123456", "密码, 例如 123456")
+		rootCmd.PersistentFlags().IntVarP(&Prefix, "prefix", "p", 3, "网段, 例如 3")
+		rootCmd.PersistentFlags().IntVarP(&Start, "start", "s", 1, "起始IP的最后一位, 例如 1")
+		rootCmd.PersistentFlags().IntVarP(&End, "end", "e", 254, "结束IP的最后一位, 例如 254")
+		rootCmd.PersistentFlags().StringVarP(&User, "user", "u", "root", "用户名, 例如 root")
+		rootCmd.PersistentFlags().StringVarP(&Password, "password", "P", "123456", "密码, 例如 123456")
+		rootCmd.PersistentFlags().StringVarP(&OutputFormat, "OutputFormat", "", "default", "输出格式, 可选 json")
+
+		rootCmd.Flags().BoolVarP(&NetworkFailed, "network", "n", false, "是否显示因为网络错误而失败的IP")
+		rootCmd.Flags().BoolVarP(&AuthenticationFailed, "auth", "a", false, "是否显示因为认证错误而失败的IP")
+		rootCmd.Flags().BoolVarP(&EnablePubKey, "pubkey", "", false, "是否启用公钥登录")
+	}
+
+	{
+		rootCmd.AddCommand(sshCmd)
+		rootCmd.AddCommand(pingCmd)
 	}
 }
 
 func Execute() error {
-	if err := rootCmd.Execute(); err != nil {
-		return err
-	}
-	return nil
+	//if err := rootCmd.Execute(); err != nil {
+	//	return err
+	//}
+	//return nil
+
+	return rootCmd.Execute()
 }
 
 func Print() {
@@ -51,9 +74,12 @@ func Print() {
 	// 使用用户名
 	// 密码
 
-	fmt.Printf("From 192.168.%d.%d to 192.168.%d.%d\n", Prefix, Start, Prefix, End)
-	fmt.Printf("User: %s\n", User)
-	fmt.Printf("Password: %s\n", Password)
+	fmt.Printf("扫描范围: 192.168.%d.%d 到 192.168.%d.%d\n", Prefix, Start, Prefix, End)
+	fmt.Printf("登录用户名: %s\n", User)
+	fmt.Printf("登录密码: %s\n", Password)
+	if EnablePubKey {
+		fmt.Println("启用公钥登录")
+	}
 	fmt.Println()
-	fmt.Println("IP List:")
+	//fmt.Println("IP List:")
 }

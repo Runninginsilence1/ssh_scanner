@@ -1,6 +1,10 @@
 package main
 
-import "ssh_scanner/cmd"
+import (
+	"log"
+
+	"github.com/Runninginsilence1/scanner/cmd"
+)
 
 // 用 cobra
 
@@ -8,6 +12,6 @@ import "ssh_scanner/cmd"
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }
