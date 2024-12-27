@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/Runninginsilence1/scanner/internal/dumper"
 )
 
 // print options
@@ -34,6 +37,7 @@ var rootCmd = &cobra.Command{
 	Long:  `扫描局域网内的SSH服务并尝试密码或密钥登录`,
 	Run: func(cmd *cobra.Command, _ []string) {
 		_ = cmd.Help()
+		os.Exit(1)
 	},
 }
 
@@ -47,7 +51,7 @@ func init() {
 		rootCmd.PersistentFlags().IntVarP(&End, "end", "e", 254, "结束IP的最后一位, 例如 254")
 		rootCmd.PersistentFlags().StringVarP(&User, "user", "u", "root", "用户名, 例如 root")
 		rootCmd.PersistentFlags().StringVarP(&Password, "password", "P", "123456", "密码, 例如 123456")
-		rootCmd.PersistentFlags().StringVarP(&OutputFormat, "OutputFormat", "", "default", "输出格式, 可选 json")
+		rootCmd.PersistentFlags().StringVarP(&OutputFormat, "output-format", "", "console", "输出格式, 可选:"+dumper.GetAllTypeString())
 
 		rootCmd.Flags().BoolVarP(&NetworkFailed, "network", "n", false, "是否显示因为网络错误而失败的IP")
 		rootCmd.Flags().BoolVarP(&AuthenticationFailed, "auth", "a", false, "是否显示因为认证错误而失败的IP")
@@ -61,11 +65,6 @@ func init() {
 }
 
 func Execute() error {
-	//if err := rootCmd.Execute(); err != nil {
-	//	return err
-	//}
-	//return nil
-
 	return rootCmd.Execute()
 }
 

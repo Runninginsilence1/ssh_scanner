@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/duke-git/lancet/v2/slice"
 	"golang.org/x/crypto/ssh"
 
+	"github.com/Runninginsilence1/scanner/internal/dumper"
 	"github.com/Runninginsilence1/scanner/internal/ip_gen"
 	"github.com/Runninginsilence1/scanner/pkg/ip_helper"
 )
@@ -159,6 +161,12 @@ type Option struct {
 }
 
 func ScannerV2(prefix, start, end int, user, password string, opt Option, format string) {
+	dumpType, err := dumper.GetType(format)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
 	calTime := time.Now()
 	defer func() {
 		fmt.Printf("扫描完成, 用时: %v ms\n", time.Now().Sub(calTime).Milliseconds())
@@ -199,9 +207,9 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 	}()
 
 	for i := start; i <= end; i++ {
-		go func(ip int) {
+		go func(suffix int) {
 			defer wg.Done()
-			ipAddr := ip_gen.GetSshAddr(prefix, ip)
+			ipAddr := ip_gen.GetSshAddr(prefix, suffix)
 			//now := time.Now()
 			err := TryConnectServerV2(ipAddr, password, user, opt.EnablePubKey)
 			//err := MockScanProgress()
@@ -222,7 +230,9 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 	sortByIpLast(authArr)
 	sortByIpLast(networkArr)
 
-	output(okArr, authArr, networkArr, opt, format)
+	//output(okList, dumpType)
+
+	output(okArr, authArr, networkArr, opt, dumpType)
 }
 
 func sortByIpLast(ips []string) {
@@ -237,24 +247,15 @@ func sortByIpLast(ips []string) {
 	})
 }
 
-func output(okArr, authArr, networkArr []string, opt Option, format string) {
-	if format == "json" {
-		result := Result{
-			OkList:         okArr,
-			AuthErrList:    authArr,
-			NetworkErrList: networkArr,
-		}
-
-		pretty, _ := formatter.Pretty(result)
-		fmt.Println(pretty)
-	} else {
+func output(okArr, authArr, networkArr []string, opt Option, dumpType dumper.Type) {
+	switch dumpType {
+	case dumper.Console:
 		if opt.ShowAuth {
 			fmt.Println("认证失败:")
 			for _, ip := range authArr {
 				fmt.Println(ip)
 			}
 			fmt.Println()
-
 		}
 		if opt.ShowNetwork {
 			fmt.Println("网络错误:")
@@ -275,7 +276,14 @@ func output(okArr, authArr, networkArr []string, opt Option, format string) {
 				fmt.Println("没有成功登录的主机")
 			}
 		}
+	case dumper.JSON:
+		result := Result{
+			OkList:         okArr,
+			AuthErrList:    authArr,
+			NetworkErrList: networkArr,
+		}
 
+		pretty, _ := formatter.Pretty(result)
+		fmt.Println(pretty)
 	}
-
 }

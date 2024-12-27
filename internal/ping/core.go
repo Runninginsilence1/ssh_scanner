@@ -2,12 +2,14 @@ package ping
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/duke-git/lancet/v2/formatter"
 	"github.com/duke-git/lancet/v2/netutil"
 	"github.com/duke-git/lancet/v2/slice"
 
+	"github.com/Runninginsilence1/scanner/internal/dumper"
 	"github.com/Runninginsilence1/scanner/internal/ip_gen"
 	"github.com/Runninginsilence1/scanner/pkg/ip_helper"
 )
@@ -24,6 +26,12 @@ func Single(host string) (ok bool) {
 }
 
 func Parallel(prefix, start, end int, format string) {
+	dumpType, err := dumper.GetType(format)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
+
 	var wg sync.WaitGroup
 	taskNum := end - start + 1
 	wg.Add(taskNum)
@@ -52,24 +60,29 @@ func Parallel(prefix, start, end int, format string) {
 		return i < j
 	})
 
-	output(okList, format)
+	output(okList, dumpType)
 	return
 }
 
-func output(list []string, format string) {
-	if format == "json" {
-		r := new(Result)
-		r.List = list
-		pretty, _ := formatter.Pretty(r)
-		fmt.Println(pretty)
-	} else {
-		if len(list) != 0 {
-			fmt.Println("可用主机:")
-			for _, ip := range list {
-				fmt.Println(ip)
+func output(list []string, dumpType dumper.Type) {
+	switch dumpType {
+	case dumper.Console:
+		{
+			if len(list) != 0 {
+				fmt.Println("可用主机:")
+				for _, ip := range list {
+					fmt.Println(ip)
+				}
+			} else {
+				fmt.Println("无可用主机")
 			}
-		} else {
-			fmt.Println("无可用主机")
+		}
+	case dumper.JSON:
+		{
+			r := new(Result)
+			r.List = list
+			pretty, _ := formatter.Pretty(r)
+			fmt.Println(pretty)
 		}
 	}
 }
