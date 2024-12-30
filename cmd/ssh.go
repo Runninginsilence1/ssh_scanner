@@ -8,6 +8,10 @@ import (
 
 // ssh命令
 
+var (
+	EnablePubKey bool
+)
+
 var sshCmd = &cobra.Command{
 	Use:   "ssh",
 	Short: "扫描局域网内的SSH服务并尝试密码或密钥登录",

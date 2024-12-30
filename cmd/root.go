@@ -17,12 +17,11 @@ var (
 
 // args for rootCmd
 var (
-	Prefix       int    // 网段
-	Start        int    // 起始IP
-	End          int    // 结束IP
-	User         string // 用户名
-	Password     string // 密码
-	EnablePubKey bool
+	Prefix   int    // 网段
+	Start    int    // 起始IP
+	End      int    // 结束IP
+	User     string // 用户名
+	Password string // 密码
 )
 
 // arg for output format
@@ -56,6 +55,10 @@ func init() {
 		rootCmd.Flags().BoolVarP(&NetworkFailed, "network", "n", false, "是否显示因为网络错误而失败的IP")
 		rootCmd.Flags().BoolVarP(&AuthenticationFailed, "auth", "a", false, "是否显示因为认证错误而失败的IP")
 		rootCmd.Flags().BoolVarP(&EnablePubKey, "pubkey", "", false, "是否启用公钥登录")
+	}
+
+	{
+		sshCmd.Flags().BoolVarP(&EnablePubKey, "pubkey", "", false, "是否启用公钥登录")
 	}
 
 	{

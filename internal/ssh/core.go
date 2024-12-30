@@ -21,9 +21,16 @@ import (
 	"github.com/Runninginsilence1/scanner/pkg/ip_helper"
 )
 
+// 错误类型
 var (
 	NetworkError = errors.New("NetworkError")
 	AuthError    = errors.New("AuthError")
+)
+
+// 验证初始化
+var (
+	readPubKeyFileOnce sync.Once
+	authMethod         ssh.AuthMethod
 )
 
 type Result struct {
@@ -84,7 +91,6 @@ func TryConnectServerV2(ipPort string, password string, user string, enablePubKe
 	if err != nil {
 		var errOp *net.OpError
 		if errors.As(err, &errOp) {
-			//err = &NetworkError{Err: errOp}
 			err = NetworkError
 		} else {
 			err = AuthError
@@ -99,9 +105,6 @@ func MockScanProgress() (err error) {
 	time.Sleep(500 * time.Millisecond)
 	return
 }
-
-var readPubKeyFileOnce sync.Once
-var authMethod ssh.AuthMethod
 
 func addIdRsaFileAuth() ssh.AuthMethod {
 	//C:\Users\H\.ssh\known_hosts
@@ -277,10 +280,16 @@ func output(okArr, authArr, networkArr []string, opt Option, dumpType dumper.Typ
 			}
 		}
 	case dumper.JSON:
-		result := Result{
-			OkList:         okArr,
-			AuthErrList:    authArr,
-			NetworkErrList: networkArr,
+		result := Result{}
+
+		result.OkList = okArr
+
+		if opt.ShowNetwork {
+			result.NetworkErrList = networkArr
+		}
+
+		if opt.ShowAuth {
+			result.AuthErrList = authArr
 		}
 
 		pretty, _ := formatter.Pretty(result)
