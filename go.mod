@@ -1,6 +1,6 @@
 module github.com/Runninginsilence1/scanner
 
-go 1.23
+go 1.20
 
 require (
 	github.com/duke-git/lancet/v2 v2.3.3
