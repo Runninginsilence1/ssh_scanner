@@ -17,7 +17,8 @@ import (
 // 用来测试ping命令
 
 type Result struct {
-	List []string `json:"list"`
+	List  []string `json:"list"`
+	Count int      `json:"count"`
 }
 
 func Single(host string) (ok bool) {
@@ -81,6 +82,7 @@ func output(list []string, dumpType dumper.Type) {
 		{
 			r := new(Result)
 			r.List = list
+			r.Count = len(list)
 			pretty, _ := formatter.Pretty(r)
 			fmt.Println(pretty)
 		}

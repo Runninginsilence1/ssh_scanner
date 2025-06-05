@@ -161,6 +161,7 @@ type Option struct {
 	ShowAuth     bool
 	ShowOk       bool
 	EnablePubKey bool
+	Verbose      bool
 }
 
 func ScannerV2(prefix, start, end int, user, password string, opt Option, format string) {
@@ -218,10 +219,19 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 			//err := MockScanProgress()
 			//fmt.Printf("%v: %v ms\n", ipAddr, time.Now().Sub(now).Milliseconds())
 			if err == nil {
+				if opt.Verbose {
+					fmt.Printf("%v\tok\n", ipAddr)
+				}
 				okChan <- ipAddr
 			} else if errors.Is(err, AuthError) {
+				if opt.Verbose {
+					fmt.Printf("%v\tauth error\n", ipAddr)
+				}
 				authChan <- ipAddr
 			} else {
+				if opt.Verbose {
+					fmt.Printf("%v\tnetwork error\n", ipAddr)
+				}
 				networkChan <- ipAddr
 			}
 		}(i)
