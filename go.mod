@@ -1,14 +1,14 @@
 module github.com/Runninginsilence1/scanner
 
-go 1.22.0
+go 1.23.0
 
-toolchain go1.23.2
+toolchain go1.24.3
 
 require (
 	github.com/duke-git/lancet/v2 v2.3.4
 	github.com/spf13/cast v1.7.1
 	github.com/spf13/cobra v1.8.1
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.35.0
 )
 
 require (
