@@ -18,7 +18,7 @@ var sshCmd = &cobra.Command{
 	Long:  `扫描局域网内的SSH服务并尝试密码或密钥登录`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if OutputFormat == "default" {
-			Print()
+			SSHPrint()
 		}
 		option := ssh.Option{
 			ShowAuth:     AuthenticationFailed,

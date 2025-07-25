@@ -61,9 +61,17 @@ func init() {
 		sshCmd.Flags().BoolVarP(&EnablePubKey, "pubkey", "", false, "是否启用公钥登录")
 	}
 
+	// detectCmd的参数
+	{
+		detectCmd.Flags().BoolVarP(&EnableUUID, "enable-uuid", "", false, "是否验证UUID")
+		detectCmd.Flags().StringVarP(&UUIDStr, "uuid", "", "481fe328-4a38-4eac-8189-0cee06846d4a", "UUID字符串")
+		detectCmd.Flags().IntVarP(&Port, "port", "", 8080, "自定义服务端的端口，默认8080")
+	}
+
 	{
 		rootCmd.AddCommand(sshCmd)
 		rootCmd.AddCommand(pingCmd)
+		rootCmd.AddCommand(detectCmd)
 	}
 }
 
@@ -71,7 +79,7 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-func Print() {
+func SSHPrint() {
 	fmt.Printf("扫描范围: 192.168.%d.%d 到 192.168.%d.%d\n", Prefix, Start, Prefix, End)
 	fmt.Printf("登录用户名: %s\n", User)
 	fmt.Printf("登录密码: %s\n", Password)

@@ -14,7 +14,7 @@ var pingCmd = &cobra.Command{
 	Long:  `扫描局域网内的ping服务, 检测主机是否存活`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if OutputFormat == "default" {
-			Print()
+			SSHPrint()
 		}
 		ping.Parallel(Prefix, Start, End, OutputFormat)
 	},
