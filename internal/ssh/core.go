@@ -39,31 +39,6 @@ type Result struct {
 	NetworkErrList []string `json:"network_err_list"`
 }
 
-// TryConnectServer provides ssh client login by password or key auth.
-// Example: TryConnectServer("192.168.6.61:22", "123456", "root")
-// 实际连接的参数
-func TryConnectServer(ipPort string, password string, user string) (ok bool) {
-	// 设置客户端请求参数
-	config := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{
-			addIdRsaFileAuth(),
-			ssh.Password(password),
-		},
-		// HostKeyCallback: ssh.FixedHostKey(hostKey),
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 忽略主机密钥
-		Timeout:         1000 * time.Millisecond,
-	}
-
-	// 作为客户端连接SSH服务器
-	client, err := ssh.Dial("tcp", ipPort, config)
-	if err != nil {
-		return false
-	}
-	defer client.Close()
-	return true
-}
-
 func TryConnectServerV2(ipPort string, password string, user string, enablePubKey bool) (err error) {
 	method := []ssh.AuthMethod{
 		//addIdRsaFileAuth(),
@@ -83,10 +58,17 @@ func TryConnectServerV2(ipPort string, password string, user string, enablePubKe
 		// HostKeyCallback: ssh.FixedHostKey(hostKey),
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 忽略主机密钥不匹配的情况
 
-		Timeout: 500 * time.Millisecond,
+		Timeout: 500 * time.Millisecond, // 这个 timeout 只影响握手阶段的判断，
 	}
 
 	// 作为客户端连接SSH服务器
+
+	// 统计超时时间
+	//startTime := time.Now()
+	//defer func() {
+	//	elapsed := time.Since(startTime)
+	//	fmt.Printf("TryConnectServerV2: %v: ssh.Dial 执行耗时: %vms\n", ipPort, elapsed.Milliseconds())
+	//}()
 	client, err := ssh.Dial("tcp", ipPort, config)
 	if err != nil {
 		var errOp *net.OpError
@@ -101,13 +83,10 @@ func TryConnectServerV2(ipPort string, password string, user string, enablePubKe
 	return nil
 }
 
-func MockScanProgress() (err error) {
-	time.Sleep(500 * time.Millisecond)
-	return
-}
-
 func addIdRsaFileAuth() ssh.AuthMethod {
 	//C:\Users\H\.ssh\known_hosts
+
+	// 使用 once 保证只读取一次公钥文件, 提高性能
 
 	readPubKeyFileOnce.Do(func() {
 		knownHostspath := `C:\Users\H\.ssh\id_rsa`
@@ -128,32 +107,6 @@ func addIdRsaFileAuth() ssh.AuthMethod {
 	})
 
 	return authMethod
-
-}
-
-// SSHScanner 扫描ssh服务器
-// 192.168.*.*;
-// 第一个参数: 3或者6
-// 第二个参数: 范围
-// Example: core.SSHScanner(3, 200, 245, "root", "123456")
-func SSHScanner(prefix, start, end int, user, password string) {
-	// 构建队列和启动并发
-	// 完成go前需要设置done
-	var wg sync.WaitGroup
-	taskNum := end - start + 1
-	wg.Add(taskNum)
-	for i := start; i <= end; i++ {
-		go func(ip int) {
-			defer wg.Done()
-			ipAddr := fmt.Sprintf("192.168.%v.%v:22", prefix, ip)
-			ok := TryConnectServer(ipAddr, password, user)
-			if ok {
-				fmt.Printf("%v\n", fmt.Sprintf("192.168.%v.%v", prefix, ip))
-			} else {
-			}
-		}(i)
-	}
-	wg.Wait()
 }
 
 type Option struct {
@@ -224,12 +177,12 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 				}
 				okChan <- ipAddr
 			} else if errors.Is(err, AuthError) {
-				if opt.Verbose {
+				if opt.Verbose && opt.ShowAuth {
 					fmt.Printf("%v\tauth error\n", ipAddr)
 				}
 				authChan <- ipAddr
 			} else {
-				if opt.Verbose {
+				if opt.Verbose && opt.ShowNetwork {
 					fmt.Printf("%v\tnetwork error\n", ipAddr)
 				}
 				networkChan <- ipAddr
