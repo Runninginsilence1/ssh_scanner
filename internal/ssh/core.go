@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -39,7 +40,7 @@ type Result struct {
 	NetworkErrList []string `json:"network_err_list"`
 }
 
-func TryConnectServerV2(ipPort string, password string, user string, enablePubKey bool) (err error) {
+func TryConnectServerV2(ctx context.Context, ipPort string, password string, user string, enablePubKey bool) (err error) {
 	method := []ssh.AuthMethod{
 		//addIdRsaFileAuth(),
 		ssh.Password(password),
@@ -62,25 +63,35 @@ func TryConnectServerV2(ipPort string, password string, user string, enablePubKe
 	}
 
 	// 作为客户端连接SSH服务器
+	// 使用 goroutine 和 select 实现 context 取消功能
 
-	// 统计超时时间
-	//startTime := time.Now()
-	//defer func() {
-	//	elapsed := time.Since(startTime)
-	//	fmt.Printf("TryConnectServerV2: %v: ssh.Dial 执行耗时: %vms\n", ipPort, elapsed.Milliseconds())
-	//}()
-	client, err := ssh.Dial("tcp", ipPort, config)
-	if err != nil {
-		var errOp *net.OpError
-		if errors.As(err, &errOp) {
-			err = NetworkError
-		} else {
-			err = AuthError
-		}
-		return
+	type dialResult struct {
+		client *ssh.Client
+		err    error
 	}
-	defer client.Close()
-	return nil
+	resultCh := make(chan dialResult, 1)
+
+	go func() {
+		client, err := ssh.Dial("tcp", ipPort, config)
+		resultCh <- dialResult{client, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case result := <-resultCh:
+		if result.err != nil {
+			var errOp *net.OpError
+			if errors.As(result.err, &errOp) {
+				err = NetworkError
+			} else {
+				err = AuthError
+			}
+			return err
+		}
+		defer result.client.Close()
+		return nil
+	}
 }
 
 func addIdRsaFileAuth() ssh.AuthMethod {
@@ -116,9 +127,10 @@ type Option struct {
 	EnablePubKey bool
 	Verbose      bool
 	Loop         bool
+	MaxWorkers   int // 最大并发数，默认 500
 }
 
-func ScannerV2(prefix, start, end int, user, password string, opt Option, format string) {
+func ScannerV2(ctx context.Context, prefix, start, end int, user, password string, opt Option, format string) {
 	dumpType, err := dumper.GetType(format)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -127,19 +139,20 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 
 	calTime := time.Now()
 	defer func() {
-		fmt.Printf("扫描完成, 用时: %v ms\n", time.Now().Sub(calTime).Milliseconds())
+		fmt.Printf("扫描完成, 用时: %v ms\n", time.Since(calTime).Milliseconds())
 	}()
-	// 构建队列和启动并发
-	// 完成go前需要设置done
-	var wg sync.WaitGroup
-	taskNum := end - start + 1
-	wg.Add(taskNum)
 
+	// 设置默认并发数
+	maxWorkers := opt.MaxWorkers
+	if maxWorkers <= 0 {
+		maxWorkers = 500
+	}
+
+	// 创建带缓冲的结果 channel
 	var (
-		// 另外用一个goroutine来接收结果
-		okChan      = make(chan string)
-		authChan    = make(chan string)
-		networkChan = make(chan string)
+		okChan      = make(chan string, 100)
+		authChan    = make(chan string, 100)
+		networkChan = make(chan string, 100)
 		doneChan    = make(chan struct{})
 	)
 
@@ -149,68 +162,131 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 		networkArr []string
 	)
 
+	// 启动结果收集 goroutine
 	go func() {
+		defer close(doneChan)
 		for {
 			select {
-			case ip := <-okChan:
-				okArr = append(okArr, ip)
-			case ip := <-authChan:
-				authArr = append(authArr, ip)
-			case ip := <-networkChan:
-				networkArr = append(networkArr, ip)
-			case <-doneChan:
+			case ip, ok := <-okChan:
+				if !ok {
+					okChan = nil
+				} else {
+					okArr = append(okArr, ip)
+				}
+			case ip, ok := <-authChan:
+				if !ok {
+					authChan = nil
+				} else {
+					authArr = append(authArr, ip)
+				}
+			case ip, ok := <-networkChan:
+				if !ok {
+					networkChan = nil
+				} else {
+					networkArr = append(networkArr, ip)
+				}
+			}
+			// 当所有 channel 都关闭时退出
+			if okChan == nil && authChan == nil && networkChan == nil {
 				return
 			}
 		}
 	}()
 
-	for i := start; i <= end; i++ {
-		go func(suffix int) {
-			defer wg.Done()
-			ipAddr := ip_gen.GetSshAddr(prefix, suffix)
-			if opt.Loop {
-				loopMode(ipAddr, password, user, opt)
-				return
-			}
+	// 创建任务队列
+	taskCh := make(chan int, 100)
+	var wg sync.WaitGroup
 
-			err := TryConnectServerV2(ipAddr, password, user, opt.EnablePubKey)
-			if err == nil {
-				if opt.Verbose {
-					fmt.Printf("%v\tok\n", ipAddr)
+	// 启动 worker pool
+	for w := 0; w < maxWorkers; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for suffix := range taskCh {
+				// 检查 context 是否已取消
+				select {
+				case <-ctx.Done():
+					return
+				default:
 				}
-				okChan <- ipAddr
-			} else if errors.Is(err, AuthError) {
-				if opt.Verbose && opt.ShowAuth {
-					fmt.Printf("%v\tauth error\n", ipAddr)
+
+				ipAddr := ip_gen.GetSshAddr(prefix, suffix)
+				if opt.Loop {
+					loopMode(ctx, ipAddr, password, user, opt)
+					continue
 				}
-				authChan <- ipAddr
-			} else {
-				if opt.Verbose && opt.ShowNetwork {
-					fmt.Printf("%v\tnetwork error\n", ipAddr)
+
+				err := TryConnectServerV2(ctx, ipAddr, password, user, opt.EnablePubKey)
+				if err == nil {
+					if opt.Verbose {
+						fmt.Printf("%v\tok\n", ipAddr)
+					}
+					okChan <- ipAddr
+				} else if errors.Is(err, AuthError) {
+					if opt.Verbose && opt.ShowAuth {
+						fmt.Printf("%v\tauth error\n", ipAddr)
+					}
+					authChan <- ipAddr
+				} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					// context 取消，不记录错误
+					return
+				} else {
+					if opt.Verbose && opt.ShowNetwork {
+						fmt.Printf("%v\tnetwork error\n", ipAddr)
+					}
+					networkChan <- ipAddr
 				}
-				networkChan <- ipAddr
 			}
-		}(i)
+		}()
 	}
+
+	// 发送任务到任务队列
+	go func() {
+		for i := start; i <= end; i++ {
+			select {
+			case <-ctx.Done():
+				break
+			case taskCh <- i:
+			}
+		}
+		close(taskCh)
+	}()
+
+	// 等待所有 worker 完成
 	wg.Wait()
-	close(doneChan)
+
+	// 关闭结果 channel
+	close(okChan)
+	close(authChan)
+	close(networkChan)
+
+	// 等待结果收集完成
+	<-doneChan
 
 	sortByIpLast(okArr)
 	sortByIpLast(authArr)
 	sortByIpLast(networkArr)
-
-	//output(okList, dumpType)
 
 	output(okArr, authArr, networkArr, opt, dumpType)
 }
 
 // 如果是loop模式则忽略 channel 以及 verbose 标志直接显示
 // 成功则退出循环
-func loopMode(ipAddr string, password string, user string, opt Option) {
+func loopMode(ctx context.Context, ipAddr string, password string, user string, opt Option) {
 	for {
-		err := TryConnectServerV2(ipAddr, password, user, opt.EnablePubKey)
+		// 检查 context 是否已取消
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		err := TryConnectServerV2(ctx, ipAddr, password, user, opt.EnablePubKey)
 		if err == nil {
 			fmt.Printf("%v\tok\n", ipAddr)
+			return
+		} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			// context 取消，退出循环
 			return
 		} else if errors.Is(err, AuthError) {
 			if opt.ShowAuth {

@@ -3,20 +3,16 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 
 	"github.com/Runninginsilence1/scanner/cmd"
+	"github.com/Runninginsilence1/scanner/internal/globalcontext"
 )
 
 func main() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	// 监听全局 context 取消（由 globalcontext 包中的信号处理触发）
 	go func() {
-		<-sigChan
-		fmt.Println("Received signal, exiting...")
-		os.Exit(0)
+		<-globalcontext.Ctx.Done()
+		fmt.Println("\n收到中断信号，正在优雅退出...")
 	}()
 
 	if err := cmd.Execute(); err != nil {
