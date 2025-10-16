@@ -25,6 +25,7 @@ var sshCmd = &cobra.Command{
 			ShowNetwork:  NetworkFailed,
 			EnablePubKey: EnablePubKey,
 			Verbose:      Verbose,
+			Loop:         Loop,
 		}
 		ssh.ScannerV2(Prefix, Start, End, User, Password, option, OutputFormat)
 	},

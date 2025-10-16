@@ -115,6 +115,7 @@ type Option struct {
 	ShowOk       bool
 	EnablePubKey bool
 	Verbose      bool
+	Loop         bool
 }
 
 func ScannerV2(prefix, start, end int, user, password string, opt Option, format string) {
@@ -167,10 +168,12 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 		go func(suffix int) {
 			defer wg.Done()
 			ipAddr := ip_gen.GetSshAddr(prefix, suffix)
-			//now := time.Now()
+			if opt.Loop {
+				loopMode(ipAddr, password, user, opt)
+				return
+			}
+
 			err := TryConnectServerV2(ipAddr, password, user, opt.EnablePubKey)
-			//err := MockScanProgress()
-			//fmt.Printf("%v: %v ms\n", ipAddr, time.Now().Sub(now).Milliseconds())
 			if err == nil {
 				if opt.Verbose {
 					fmt.Printf("%v\tok\n", ipAddr)
@@ -199,6 +202,27 @@ func ScannerV2(prefix, start, end int, user, password string, opt Option, format
 	//output(okList, dumpType)
 
 	output(okArr, authArr, networkArr, opt, dumpType)
+}
+
+// 如果是loop模式则忽略 channel 以及 verbose 标志直接显示
+// 成功则退出循环
+func loopMode(ipAddr string, password string, user string, opt Option) {
+	for {
+		err := TryConnectServerV2(ipAddr, password, user, opt.EnablePubKey)
+		if err == nil {
+			fmt.Printf("%v\tok\n", ipAddr)
+			return
+		} else if errors.Is(err, AuthError) {
+			if opt.ShowAuth {
+				fmt.Printf("%v\tauth error\n", ipAddr)
+			}
+		} else {
+			if opt.ShowNetwork {
+				fmt.Printf("%v\tnetwork error\n", ipAddr)
+			}
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func sortByIpLast(ips []string) {
