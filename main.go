@@ -9,6 +9,8 @@ import (
 )
 
 func main() {
+	log.SetFlags(log.Lshortfile)
+
 	// 监听全局 context 取消（由 globalcontext 包中的信号处理触发）
 	go func() {
 		<-globalcontext.Ctx.Done()

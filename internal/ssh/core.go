@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -100,7 +101,13 @@ func addIdRsaFileAuth() ssh.AuthMethod {
 	// 使用 once 保证只读取一次公钥文件, 提高性能
 
 	readPubKeyFileOnce.Do(func() {
-		knownHostspath := `C:\Users\H\.ssh\id_rsa`
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Fatal(fmt.Errorf("fetch user home dir: %w", err))
+		}
+
+		knownHostspath := filepath.Join(homeDir, ".ssh/id_rsa")
+
 		reader, _, err := fileutil.ReadFile(knownHostspath)
 		if err != nil {
 			log.Fatal(err)
