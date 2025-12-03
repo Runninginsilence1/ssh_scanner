@@ -18,9 +18,6 @@ var sshCmd = &cobra.Command{
 	Short: "扫描局域网内的SSH服务并尝试密码或密钥登录",
 	Long:  `扫描局域网内的SSH服务并尝试密码或密钥登录`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if OutputFormat == "default" {
-			SSHPrint()
-		}
 		option := ssh.Option{
 			ShowAuth:     AuthenticationFailed,
 			ShowNetwork:  NetworkFailed,
@@ -29,7 +26,17 @@ var sshCmd = &cobra.Command{
 			Loop:         Loop,
 			MaxWorkers:   0, // 使用默认值 500
 		}
-		// 使用全局 context，支持 Ctrl+C 优雅取消
-		ssh.ScannerV2(globalcontext.Ctx, Prefix, Start, End, User, Password, option, OutputFormat)
+
+		// 如果是 console 输出格式且不是 verbose 模式，使用 bubbletea
+		if OutputFormat == "console" && !Verbose {
+			SSHPrint()
+			ssh.ScannerWithTea(globalcontext.Ctx, Prefix, Start, End, User, Password, option, OutputFormat)
+		} else {
+			// 其他情况使用原来的扫描器
+			if OutputFormat == "default" {
+				SSHPrint()
+			}
+			ssh.ScannerV2(globalcontext.Ctx, Prefix, Start, End, User, Password, option, OutputFormat)
+		}
 	},
 }
