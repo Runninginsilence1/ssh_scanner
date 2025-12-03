@@ -43,12 +43,13 @@ type Result struct {
 
 func TryConnectServerV2(ctx context.Context, ipPort string, password string, user string, enablePubKey bool) (err error) {
 	method := []ssh.AuthMethod{
-		//addIdRsaFileAuth(),
 		ssh.Password(password),
 	}
 
 	if enablePubKey {
-		method = append(method, addIdRsaFileAuth())
+		method = []ssh.AuthMethod{
+			addIdRsaFileAuth(),
+		}
 	}
 
 	// 设置客户端请求参数

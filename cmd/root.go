@@ -64,13 +64,13 @@ func init() {
 		sshCmd.PersistentFlags().
 			StringVarP(&User, "user", "u", "root", "用户名, 例如 root")
 		sshCmd.PersistentFlags().
-			StringVarP(&Password, "password", "P", "123456", "密码, 例如 123456")
+			StringVarP(&Password, "password", "P", "123456", "密码, 例如 123456.当启用公钥登录(--pubkey)的时候无效")
 		sshCmd.Flags().
 			BoolVarP(&NetworkFailed, "network", "n", false, "是否显示因为网络错误而失败的IP")
 		sshCmd.Flags().
 			BoolVarP(&AuthenticationFailed, "auth", "a", false, "是否显示因为认证错误而失败的IP")
 		sshCmd.Flags().
-			BoolVarP(&EnablePubKey, "pubkey", "", false, "是否启用公钥登录")
+			BoolVarP(&EnablePubKey, "pubkey", "", false, "只允许启用公钥登录")
 		sshCmd.Flags().BoolVarP(&Loop, "loop", "l", false, "是否启用循环检索模式")
 	}
 
