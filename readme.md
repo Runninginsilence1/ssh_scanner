@@ -56,6 +56,9 @@ go build -o scanner .
 # 循环检索模式
 ./scanner ssh -l
 
+# 指定自定义 SSH 端口
+./scanner ssh --port 2222
+
 # JSON 格式输出
 ./scanner ssh --output-format json
 ```
@@ -74,6 +77,7 @@ go build -o scanner .
 
 - `-u, --user`：SSH 用户名（默认：root）
 - `-P, --password`：SSH 密码（默认：123456）
+- `--port`：SSH 端口（默认：22）
 - `-a, --auth`：显示认证失败的 IP
 - `-n, --network`：显示网络错误的 IP
 - `--pubkey`：启用公钥登录
@@ -95,8 +99,11 @@ go build -o scanner .
 ### 扫描局域网中的 SSH 服务
 
 ```bash
-# 扫描 192.168.3.1 到 192.168.3.254
+# 扫描 192.168.3.1 到 192.168.3.254，使用默认端口 22
 ./scanner ssh -p 3 -s 1 -e 254 -u root -P 123456
+
+# 扫描自定义端口的 SSH 服务
+./scanner ssh -p 3 -s 1 -e 254 -u root -P 123456 --port 2222
 ```
 
 ### 查看所有失败的连接

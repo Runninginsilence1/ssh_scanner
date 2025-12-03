@@ -136,6 +136,7 @@ type Option struct {
 	Verbose      bool
 	Loop         bool
 	MaxWorkers   int // 最大并发数，默认 500
+	Port         int // SSH 端口，默认 22
 }
 
 func ScannerV2(ctx context.Context, prefix, start, end int, user, password string, opt Option, format string) {
@@ -218,7 +219,12 @@ func ScannerV2(ctx context.Context, prefix, start, end int, user, password strin
 				default:
 				}
 
-				ipAddr := ip_gen.GetSshAddr(prefix, suffix)
+				var ipAddr string
+				if opt.Port > 0 && opt.Port != 22 {
+					ipAddr = ip_gen.GetSshAddrWithPort(prefix, suffix, opt.Port)
+				} else {
+					ipAddr = ip_gen.GetSshAddr(prefix, suffix)
+				}
 				if opt.Loop {
 					loopMode(ctx, ipAddr, password, user, opt)
 					continue

@@ -11,6 +11,7 @@ import (
 
 var (
 	EnablePubKey bool
+	SSHPort      int
 )
 
 var sshCmd = &cobra.Command{
@@ -25,6 +26,7 @@ var sshCmd = &cobra.Command{
 			Verbose:      Verbose,
 			Loop:         Loop,
 			MaxWorkers:   0, // 使用默认值 500
+			Port:         SSHPort,
 		}
 
 		// 如果是 console 输出格式且不是 verbose 模式，使用 bubbletea

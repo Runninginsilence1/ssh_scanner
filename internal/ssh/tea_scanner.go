@@ -89,7 +89,12 @@ func runScan(model *TeaModel, prefix, start, end int, user, password string, opt
 				default:
 				}
 
-				ipAddr := ip_gen.GetSshAddr(prefix, suffix)
+				var ipAddr string
+				if opt.Port > 0 && opt.Port != 22 {
+					ipAddr = ip_gen.GetSshAddrWithPort(prefix, suffix, opt.Port)
+				} else {
+					ipAddr = ip_gen.GetSshAddr(prefix, suffix)
+				}
 
 				// Loop 模式不适用于 bubbletea，跳过
 				if opt.Loop {

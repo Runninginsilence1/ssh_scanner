@@ -66,6 +66,8 @@ func init() {
 		sshCmd.PersistentFlags().
 			StringVarP(&Password, "password", "P", "123456", "密码, 例如 123456.当启用公钥登录(--pubkey)的时候无效")
 		sshCmd.Flags().
+			IntVarP(&SSHPort, "port", "", 22, "SSH端口, 默认22")
+		sshCmd.Flags().
 			BoolVarP(&NetworkFailed, "network", "n", false, "是否显示因为网络错误而失败的IP")
 		sshCmd.Flags().
 			BoolVarP(&AuthenticationFailed, "auth", "a", false, "是否显示因为认证错误而失败的IP")
